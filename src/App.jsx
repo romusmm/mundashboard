@@ -737,10 +737,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
   const [selectedCountry, setSelectedCountry] = useState(countries[0] || '');
   const [profileDraft, setProfileDraft] = useState({
     title: '',
-    objective: '',
-    strategy: '',
-    risks: '',
-    impact: '',
+    description: '',
     keyTerms: '',
   });
   const estimate = (text) => Math.ceil(text.split(/\s+/).filter(Boolean).length / 130);
@@ -766,10 +763,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
       return {
         id: crypto.randomUUID(),
         title: 'Perfil rápido',
-        objective: raw,
-        strategy: '',
-        risks: '',
-        impact: '',
+        description: raw,
         keyTerms: '',
       };
     }
@@ -777,20 +771,14 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
       return {
         id: raw.id || crypto.randomUUID(),
         title: raw.category ? `${raw.category}` : 'Perfil rápido',
-        objective: raw.text,
-        strategy: '',
-        risks: '',
-        impact: '',
+        description: raw.text,
         keyTerms: '',
       };
     }
     return {
       id: raw.id || crypto.randomUUID(),
       title: raw.title || 'Perfil sin título',
-      objective: raw.objective || '',
-      strategy: raw.strategy || '',
-      risks: raw.risks || '',
-      impact: raw.impact || '',
+      description: raw.description || '',
       keyTerms: raw.keyTerms || '',
     };
   };
@@ -802,21 +790,18 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
 
   const addStructuredProfile = () => {
     if (!selectedCountry) return;
-    if (!profileDraft.title.trim() && !profileDraft.objective.trim() && !profileDraft.strategy.trim()) {
-      pushToast('Completa al menos título, objetivo o estrategia.', 'warning');
+    if (!profileDraft.title.trim() && !profileDraft.description.trim()) {
+      pushToast('Completa al menos título o descripción.', 'warning');
       return;
     }
     const next = {
       id: crypto.randomUUID(),
       title: profileDraft.title.trim() || 'Perfil estratégico',
-      objective: profileDraft.objective.trim(),
-      strategy: profileDraft.strategy.trim(),
-      risks: profileDraft.risks.trim(),
-      impact: profileDraft.impact.trim(),
+      description: profileDraft.description.trim(),
       keyTerms: profileDraft.keyTerms.trim(),
     };
     setAttackProfiles((p) => ({ ...p, [selectedCountry]: [...(p[selectedCountry] || []).map(normalizeProfile), next] }));
-    setProfileDraft({ title: '', objective: '', strategy: '', risks: '', impact: '', keyTerms: '' });
+    setProfileDraft({ title: '', description: '', keyTerms: '' });
     pushToast('Perfil de ataque estructurado guardado.', 'success');
   };
 
@@ -828,7 +813,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
   };
 
   const profileToRichText = (profile, country) => {
-    return `# ${country} · ${profile.title}\n\n**Objetivo**\n${profile.objective || '—'}\n\n**Estrategia**\n${profile.strategy || '—'}\n\n**Riesgos**\n${profile.risks || '—'}\n\n**Impacto**\n${profile.impact || '—'}\n\n**Términos clave**\n${profile.keyTerms || '—'}`;
+    return `# ${country} · ${profile.title}\n\n**Descripción**\n${profile.description || '—'}\n\n**Términos clave**\n${profile.keyTerms || '—'}`;
   };
 
   return (
@@ -872,10 +857,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
                 <div className="grid gap-3 md:grid-cols-2">
                   <input value={profileDraft.title} onChange={(e) => setProfileDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Título del perfil" className="rounded-xl border p-3" />
                   <input value={profileDraft.keyTerms} onChange={(e) => setProfileDraft((d) => ({ ...d, keyTerms: e.target.value }))} placeholder="Términos clave (coma separada)" className="rounded-xl border p-3" />
-                  <textarea value={profileDraft.objective} onChange={(e) => setProfileDraft((d) => ({ ...d, objective: e.target.value }))} placeholder="Objetivo" className="rounded-xl border p-3 md:col-span-2" rows={3} />
-                  <textarea value={profileDraft.strategy} onChange={(e) => setProfileDraft((d) => ({ ...d, strategy: e.target.value }))} placeholder="Estrategia" className="rounded-xl border p-3" rows={3} />
-                  <textarea value={profileDraft.risks} onChange={(e) => setProfileDraft((d) => ({ ...d, risks: e.target.value }))} placeholder="Riesgos" className="rounded-xl border p-3" rows={3} />
-                  <textarea value={profileDraft.impact} onChange={(e) => setProfileDraft((d) => ({ ...d, impact: e.target.value }))} placeholder="Impacto esperado" className="rounded-xl border p-3 md:col-span-2" rows={3} />
+                  <textarea value={profileDraft.description} onChange={(e) => setProfileDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Descripción" className="rounded-xl border p-3 md:col-span-2" rows={4} />
                 </div>
                 <button onClick={addStructuredProfile} className="mt-3 rounded-full bg-[#007AFF] px-4 py-2 text-sm text-white">Guardar perfil</button>
               </div>
@@ -885,7 +867,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
                   <article key={profile.id} className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-[rgba(60,60,67,0.08)]">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h4 className="text-base font-semibold text-[#1C1C1E]">{profile.title}</h4>
+                        <h4 className="text-base font-semibold text-black">{profile.title}</h4>
                         <p className="mt-1 text-xs uppercase tracking-wide text-[#AEAEB2]">{selectedCountry}</p>
                       </div>
                       <div className="flex gap-2 text-xs">
@@ -896,26 +878,10 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
 
                     <div className="mt-4 space-y-4 text-sm text-[#1C1C1E]">
                       <section>
-                        <p className="font-semibold">Objetivo</p>
-                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.objective || 'Sin definir.'}</p>
+                        <p className="font-semibold">Descripción</p>
+                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.description || 'Sin definir.'}</p>
                       </section>
                       <div className="h-px bg-[rgba(60,60,67,0.10)]" />
-                      <section>
-                        <p className="font-semibold">Estrategia</p>
-                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.strategy || 'Sin definir.'}</p>
-                      </section>
-                      <div className="h-px bg-[rgba(60,60,67,0.10)]" />
-                      <section>
-                        <p className="font-semibold">Riesgos</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-5 text-[#3A3A3C]">
-                          {(profile.risks ? profile.risks.split(/\n+/) : ['Sin riesgos documentados.']).map((r, i) => <li key={`${profile.id}-risk-${i}`}>{r}</li>)}
-                        </ul>
-                      </section>
-                      <div className="h-px bg-[rgba(60,60,67,0.10)]" />
-                      <section>
-                        <p className="font-semibold">Impacto</p>
-                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.impact || 'Sin definir.'}</p>
-                      </section>
                       <section>
                         <p className="font-semibold">Términos clave</p>
                         <div className="mt-2 flex flex-wrap gap-2">
