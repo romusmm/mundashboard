@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #1c1c1e;
+  font-family: 'Figtree', sans-serif;
+  background: #f2f2f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 6% 0%, rgba(0, 122, 255, 0.14), transparent 34%),
+    radial-gradient(circle at 92% 8%, rgba(52, 199, 89, 0.11), transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(255, 149, 0, 0.08), transparent 35%),
+    #f2f2f7;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  backdrop-filter: blur(16px);
+}
+
+.glass-strong {
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.62));
+  border: 1px solid rgba(60, 60, 67, 0.1);
+  backdrop-filter: blur(24px);
+}
+
+.view-enter {
+  animation: viewEnter 260ms ease;
+}
+
+@keyframes viewEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.timer-ring {
+  background: conic-gradient(#007aff var(--progress, 0%), rgba(60, 60, 67, 0.14) 0%);
+}
+
+textarea,
+input,
+select,
+button {
+  font: inherit;
+}
