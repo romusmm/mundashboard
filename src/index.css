@@ -8,9 +8,7 @@
   background: #f2f2f7;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -34,29 +32,42 @@ body {
   backdrop-filter: blur(24px);
 }
 
-.view-enter {
-  animation: viewEnter 260ms ease;
-}
+.view-enter { animation: viewEnter 260ms ease; }
 
 @keyframes viewEnter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .timer-ring {
   background: conic-gradient(#007aff var(--progress, 0%), rgba(60, 60, 67, 0.14) 0%);
 }
 
-textarea,
-input,
-select,
-button {
-  font: inherit;
+.timer-smooth { transition: all 1s linear; }
+
+.timer-alert { animation: timerPulse 0.8s ease-in-out infinite alternate; }
+
+@keyframes timerPulse {
+  from { box-shadow: 0 0 0 rgba(255, 59, 48, 0.1); }
+  to { box-shadow: 0 0 40px rgba(255, 59, 48, 0.35); }
 }
+
+.toast-in { animation: toastIn 180ms ease; }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ticker { display: inline-block; animation: tickerPop 180ms ease; }
+
+@keyframes tickerPop {
+  from { transform: scale(1.1); opacity: 0.7; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.crisis {
+  filter: saturate(1.1);
+}
+
+textarea, input, select, button { font: inherit; }
