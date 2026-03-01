@@ -33,7 +33,6 @@ const storageKeys = {
   attackProfiles: 'mun_attack_profiles',
   resolution: 'mun_resolution',
   timerState: 'mun_timer_state',
-  motions: 'mun_motions',
 };
 
 const defaultSettings = {
@@ -130,7 +129,6 @@ function App() {
   const [speeches, setSpeeches] = useState([]);
   const [attackProfiles, setAttackProfiles] = useState({});
   const [resolution, setResolution] = useState({ title: '', clauses: '', signatories: 0, status: 'Borrador' });
-  const [motions, setMotions] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [onboardingStep, setOnboardingStep] = useState(readLS(storageKeys.onboardingCompleted, false) ? 0 : 1);
   const [presentingSpeechId, setPresentingSpeechId] = useState(null);
@@ -158,7 +156,6 @@ function App() {
     setAttackProfiles(readLS(storageKeys.attackProfiles, {}));
     setResolution(readLS(storageKeys.resolution, { title: '', clauses: '', signatories: 0, status: 'Borrador' }));
     setTimer(readLS(storageKeys.timerState, defaultTimer));
-    setMotions(readLS(storageKeys.motions, []));
   }, []);
 
   useEffect(() => {
@@ -173,10 +170,9 @@ function App() {
       localStorage.setItem(storageKeys.attackProfiles, JSON.stringify(attackProfiles));
       localStorage.setItem(storageKeys.resolution, JSON.stringify(resolution));
       localStorage.setItem(storageKeys.timerState, JSON.stringify(timer));
-      localStorage.setItem(storageKeys.motions, JSON.stringify(motions));
     }, 280);
     return () => clearTimeout(saveRef.current);
-  }, [settings, speakers, alliances, notesGeneral, notesCountries, speeches, attackProfiles, resolution, timer, motions]);
+  }, [settings, speakers, alliances, notesGeneral, notesCountries, speeches, attackProfiles, resolution, timer]);
 
   useEffect(() => {
     if (!timer.running) return;
@@ -280,10 +276,6 @@ function App() {
 
   const applyTimerPreset = (mode, seconds) => setTimer((prev) => ({ ...prev, mode, initial: seconds, remaining: seconds, running: false }));
 
-  const votingTotal = settings.countries.length;
-  const simpleMajority = Math.floor(votingTotal / 2) + 1;
-  const twoThirds = Math.ceil(votingTotal * (2 / 3));
-
   const exportAllData = useCallback(() => {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -296,12 +288,11 @@ function App() {
       speeches,
       attackProfiles,
       resolution,
-      motions,
       topicKey,
     };
     downloadText(`mun-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
     pushToast('Exportación completa descargada.', 'success');
-  }, [settings, timer, speakers, alliances, notesGeneral, notesCountries, speeches, attackProfiles, resolution, motions, topicKey, pushToast]);
+  }, [settings, timer, speakers, alliances, notesGeneral, notesCountries, speeches, attackProfiles, resolution, topicKey, pushToast]);
 
   if (onboardingStep > 0) {
     return (
@@ -321,7 +312,10 @@ function App() {
     );
   }
 
-  const legalItems = [...referenceBase.legal[settings.marcoLegal], ...(settings.legalCustom?.[settings.marcoLegal] || [])];
+  const legalItems = [
+    ...referenceBase.legal[settings.marcoLegal].map((text, idx) => ({ article: `Base ${idx + 1}`, text, summary: '' })),
+    ...((settings.legalCustom?.[settings.marcoLegal] || []).map((item) => typeof item === 'string' ? { article: 'Personalizado', text: item, summary: '' } : item)),
+  ];
 
   return (
     <div className={`app-shell min-h-screen font-ui text-[#1C1C1E] ${crisisMode ? 'crisis' : ''}`}>
@@ -401,7 +395,6 @@ function App() {
                 </div>
               </div>
 
-              <MotionAndVotingPanel motions={motions} setMotions={setMotions} simpleMajority={simpleMajority} twoThirds={twoThirds} total={votingTotal} />
             </section>
           )}
 
@@ -903,38 +896,61 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
 }
 
 function ReferencesView({ settings, setSettings, legalItems }) {
-  const [customItem, setCustomItem] = useState('');
+  const [draft, setDraft] = useState({ article: '', text: '', summary: '' });
+
+  const addLegalEntry = () => {
+    if (!draft.article.trim() || !draft.text.trim()) return;
+    setSettings((s) => ({
+      ...s,
+      legalCustom: {
+        ...s.legalCustom,
+        [s.marcoLegal]: [
+          ...(s.legalCustom?.[s.marcoLegal] || []),
+          {
+            article: draft.article.trim(),
+            text: draft.text.trim(),
+            summary: draft.summary.trim(),
+          },
+        ],
+      },
+    }));
+    setDraft({ article: '', text: '', summary: '' });
+  };
+
   return (
     <section className="grid gap-5 md:grid-cols-2">
-      <div className="rounded-3xl bg-white p-6 shadow-soft"><h3 className="font-semibold">Frases parlamentarias</h3>{referenceBase.frases.map((f) => <p key={f} className="mt-3 text-sm text-[#6E6E73]">{f}</p>)}</div>
-      <div className="rounded-3xl bg-white p-6 shadow-soft"><h3 className="font-semibold">Marco legal {settings.marcoLegal}</h3><div className="mt-3 space-y-2">{legalItems.map((f, i) => <p key={`${f}-${i}`} className="text-sm text-[#6E6E73]">• {f}</p>)}</div><div className="mt-4 rounded-xl border border-[rgba(60,60,67,0.10)] bg-[#F8F8FC] p-3"><p className="text-sm font-medium">Agregar base legal personalizada</p><div className="mt-2 flex gap-2"><input value={customItem} onChange={(e) => setCustomItem(e.target.value)} placeholder="Artículo, resolución o precedente" className="flex-1 rounded-xl border p-2" /><button onClick={() => { if (!customItem.trim()) return; setSettings((s) => ({ ...s, legalCustom: { ...s.legalCustom, [s.marcoLegal]: [...(s.legalCustom?.[s.marcoLegal] || []), customItem.trim()] } })); setCustomItem(''); }} className="rounded-full bg-[#007AFF] px-3 text-sm text-white">Añadir</button></div></div></div>
+      <div className="rounded-3xl bg-white p-6 shadow-soft">
+        <h3 className="font-semibold">Frases parlamentarias</h3>
+        {referenceBase.frases.map((f) => <p key={f} className="mt-3 text-sm text-[#6E6E73]">{f}</p>)}
+      </div>
+
+      <div className="rounded-3xl bg-white p-6 shadow-soft">
+        <h3 className="font-semibold">Marco legal {settings.marcoLegal}</h3>
+
+        <div className="mt-4 space-y-3">
+          {legalItems.length ? legalItems.map((item, i) => (
+            <article key={`${item.article}-${i}`} className="rounded-2xl bg-[#F8F8FC] p-4 ring-1 ring-[rgba(60,60,67,0.08)]">
+              <p className="text-xs uppercase tracking-wide text-[#AEAEB2]">{item.article || `Artículo ${i + 1}`}</p>
+              <p className="mt-1 text-sm font-medium text-[#1C1C1E]">{item.text}</p>
+              {item.summary ? <p className="mt-2 text-sm text-[#6E6E73]"><span className="font-semibold">Resumen:</span> {item.summary}</p> : null}
+            </article>
+          )) : <EmptyState icon={BookOpen} title="Sin artículos cargados" description="Agrega artículos estructurados con texto y resumen." />}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-[rgba(60,60,67,0.10)] bg-white p-4">
+          <p className="text-sm font-semibold">Agregar artículo personalizado</p>
+          <div className="mt-3 grid gap-2">
+            <input value={draft.article} onChange={(e) => setDraft((d) => ({ ...d, article: e.target.value }))} placeholder="Artículo (ej: Art. 12)" className="rounded-xl border p-3" />
+            <textarea value={draft.text} onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))} placeholder="Texto legal" className="rounded-xl border p-3" rows={3} />
+            <textarea value={draft.summary} onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))} placeholder="Resumen operativo" className="rounded-xl border p-3" rows={2} />
+            <button onClick={addLegalEntry} className="w-fit rounded-full bg-[#007AFF] px-4 py-2 text-sm text-white">Añadir artículo</button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function MotionAndVotingPanel({ motions, setMotions, simpleMajority, twoThirds, total }) {
-  const [draft, setDraft] = useState({ text: '', proposer: '', result: 'Pendiente' });
-  return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-3xl bg-white p-6 shadow-soft">
-        <h3 className="mb-3 font-semibold">Tracker de mociones</h3>
-        <div className="grid gap-2 md:grid-cols-3">
-          <input value={draft.text} onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))} className="rounded-xl border p-2" placeholder="Moción" />
-          <input value={draft.proposer} onChange={(e) => setDraft((d) => ({ ...d, proposer: e.target.value }))} className="rounded-xl border p-2" placeholder="Proponente" />
-          <select value={draft.result} onChange={(e) => setDraft((d) => ({ ...d, result: e.target.value }))} className="rounded-xl border p-2"><option>Pendiente</option><option>Aprobada</option><option>Rechazada</option></select>
-        </div>
-        <button onClick={() => { if (!draft.text) return; setMotions((m) => [...m, { ...draft, id: crypto.randomUUID() }]); setDraft({ text: '', proposer: '', result: 'Pendiente' }); }} className="mt-2 rounded-full bg-[#007AFF] px-4 py-2 text-sm text-white">Registrar</button>
-        <div className="mt-3 space-y-2 max-h-40 overflow-auto">{motions.map((m) => <div key={m.id} className="rounded-xl bg-[#F2F2F7] p-2 text-sm">{m.text} · {m.proposer || 's/p'} · {m.result}</div>)}</div>
-      </div>
-      <div className="rounded-3xl bg-white p-6 shadow-soft">
-        <h3 className="mb-3 flex items-center gap-2 font-semibold"><Vote size={16} />Calculadora de mayorías</h3>
-        <p className="text-sm text-[#6E6E73]">Total de delegaciones: {total}</p>
-        <p className="mt-2 text-sm">Mayoría simple: <strong>{simpleMajority}</strong></p>
-        <p className="text-sm">Mayoría 2/3: <strong>{twoThirds}</strong></p>
-      </div>
-    </section>
-  );
-}
 
 function PresentationModal({ speech, onClose }) {
   return (
