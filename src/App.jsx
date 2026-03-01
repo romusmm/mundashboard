@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlarmClock,
-  ArrowDown,
-  ArrowUp,
+  GripVertical,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -140,6 +139,8 @@ function App() {
   const [noDistraction, setNoDistraction] = useState(false);
   const [crisisMode, setCrisisMode] = useState(false);
   const [speechSearch, setSpeechSearch] = useState('');
+  const [smoothRemaining, setSmoothRemaining] = useState(defaultTimer.remaining);
+  const tickRef = useRef(performance.now());
   const saveRef = useRef();
 
   const currentTopicLabel = topicKey === 'tema1' ? settings.tema1 || 'Tema 1' : settings.tema2 || 'Tema 2';
@@ -206,6 +207,23 @@ function App() {
   }, [timer.running, pushToast]);
 
   useEffect(() => {
+    tickRef.current = performance.now();
+    if (!timer.running) setSmoothRemaining(timer.remaining);
+  }, [timer.remaining, timer.running]);
+
+  useEffect(() => {
+    if (!timer.running) return;
+    let raf = 0;
+    const loop = (now) => {
+      const elapsed = (now - tickRef.current) / 1000;
+      setSmoothRemaining(Math.max(timer.remaining - elapsed, 0));
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [timer.running, timer.remaining]);
+
+  useEffect(() => {
     if (!toasts.length) return;
     const id = setTimeout(() => setToasts((prev) => prev.slice(1)), 3200);
     return () => clearTimeout(id);
@@ -259,7 +277,7 @@ function App() {
 
   const formatTime = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
-  const timerProgress = 100 - (timer.remaining / Math.max(timer.initial, 1)) * 100;
+  const timerProgress = 100 - (smoothRemaining / Math.max(timer.initial, 1)) * 100;
 
   const applyTimerPreset = (mode, seconds) => setTimer((prev) => ({ ...prev, mode, initial: seconds, remaining: seconds, running: false }));
 
@@ -307,7 +325,7 @@ function App() {
   const legalItems = [...referenceBase.legal[settings.marcoLegal], ...(settings.legalCustom?.[settings.marcoLegal] || [])];
 
   return (
-    <div className={`min-h-screen font-ui text-[#1C1C1E] ${crisisMode ? 'crisis' : ''}`}>
+    <div className={`app-shell min-h-screen font-ui text-[#1C1C1E] ${crisisMode ? 'crisis' : ''}`}>
       {!noDistraction && (
         <aside className={`fixed bottom-4 left-4 top-4 z-20 rounded-3xl glass-strong p-4 shadow-soft transition-all ${collapsed ? 'w-[88px]' : 'w-[266px]'}`}>
           <div className="mb-6 flex items-center justify-between">
@@ -357,7 +375,7 @@ function App() {
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#007AFF]/10 via-transparent to-[#34C759]/10" />
                 <div className="relative">
                   <p className="text-sm text-[#6E6E73]">Tiempo activo · {timer.mode}{timer.speakerName ? ` · ${timer.speakerName}` : ''}</p>
-                  <p className="font-number mt-2 text-7xl">{formatTime(timer.remaining)}</p>
+                  <p className="font-number mt-2 text-7xl">{formatTime(Math.ceil(smoothRemaining))}</p>
                   {timer.remaining === 0 && <p className="mt-2 text-sm font-semibold text-[#FF3B30]">Tiempo agotado</p>}
                   <p className="mt-2 text-sm text-[#6E6E73]">Contexto actual: {currentTopicLabel}</p>
                   <div className="mt-5 flex gap-2">
@@ -399,7 +417,7 @@ function App() {
 
               <div className="mx-auto grid h-80 w-80 place-items-center rounded-full timer-ring timer-smooth p-3" style={{ '--progress': `${timerProgress}%` }}>
                 <div className="grid h-full w-full place-items-center rounded-full bg-white">
-                  <p className="font-number text-6xl">{formatTime(timer.remaining)}</p>
+                  <p className="font-number text-6xl">{formatTime(Math.ceil(smoothRemaining))}</p>
                 </div>
               </div>
 
@@ -482,7 +500,7 @@ function App() {
       </div>
 
       {presentingSpeechId && <PresentationModal speech={speeches.find((s) => s.id === presentingSpeechId)} onClose={() => setPresentingSpeechId(null)} />}
-      {timerFull && <TimerFullscreen timer={timer} formatTime={formatTime} onClose={() => setTimerFull(false)} />}
+      {timerFull && <TimerFullscreen timer={timer} displayRemaining={Math.ceil(smoothRemaining)} formatTime={formatTime} onClose={() => setTimerFull(false)} />}
 
       {noDistraction && (
         <div className="fixed left-4 top-4 z-50 flex items-center gap-2 rounded-full glass-strong px-3 py-2 text-xs">
@@ -560,14 +578,31 @@ function Onboarding({ step, settings, setSettings, onBack, onNext, onDone }) {
 
 function SpeakersView({ countries, topicKey, speakers, setSpeakers, timer, setTimer, currentSpeaker, pushToast }) {
   const [country, setCountry] = useState(countries[0] || '');
-  const topicSpeakers = speakers.filter((s) => s.topicKey === topicKey);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const topicSpeakers = speakers.filter((sp) => sp.topicKey === topicKey);
+
+  const reorderTopicSpeakers = useCallback((sourceId, targetId) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    setSpeakers((prev) => {
+      const current = prev.filter((sp) => sp.topicKey === topicKey);
+      const others = prev.filter((sp) => sp.topicKey !== topicKey);
+      const from = current.findIndex((sp) => sp.id === sourceId);
+      const to = current.findIndex((sp) => sp.id === targetId);
+      if (from < 0 || to < 0) return prev;
+      const reordered = [...current];
+      const [item] = reordered.splice(from, 1);
+      reordered.splice(to, 0, item);
+      return [...others, ...reordered];
+    });
+  }, [setSpeakers, topicKey]);
 
   const setCurrent = (id) => {
-    setSpeakers((prev) => prev.map((s) => {
-      if (s.topicKey !== topicKey) return s;
-      if (s.status === 'actual') return { ...s, status: 'historial', history: true, lastDuration: timer.initial - timer.remaining };
-      if (s.id === id) return { ...s, status: 'actual' };
-      return s;
+    setSpeakers((prev) => prev.map((sp) => {
+      if (sp.topicKey !== topicKey) return sp;
+      if (sp.status === 'actual') return { ...sp, status: 'historial', history: true, lastDuration: timer.initial - timer.remaining };
+      if (sp.id === id) return { ...sp, status: 'actual' };
+      return sp;
     }));
     setTimer((t) => ({ ...t, running: false, remaining: t.initial, speakerName: topicSpeakers.find((x) => x.id === id)?.country || '' }));
     pushToast('Orador activo actualizado y temporizador reiniciado.', 'success');
@@ -575,38 +610,59 @@ function SpeakersView({ countries, topicKey, speakers, setSpeakers, timer, setTi
 
   const addSpeaker = () => {
     if (!country) return;
-    if (topicSpeakers.some((s) => s.country === country && s.status !== 'tachado')) return pushToast('Ese país ya está en la lista activa.', 'warning');
+    if (topicSpeakers.some((sp) => sp.country === country && sp.status !== 'tachado')) return pushToast('Ese país ya está en la lista activa.', 'warning');
     setSpeakers((prev) => [...prev, { id: crypto.randomUUID(), topicKey, country, status: 'pendiente', history: false, lastDuration: 0 }]);
   };
 
-  const move = (id, direction) => {
-    setSpeakers((prev) => {
-      const current = prev.filter((s) => s.topicKey === topicKey);
-      const others = prev.filter((s) => s.topicKey !== topicKey);
-      const idx = current.findIndex((s) => s.id === id);
-      const target = idx + direction;
-      if (target < 0 || target >= current.length) return prev;
-      [current[idx], current[target]] = [current[target], current[idx]];
-      return [...others, ...current];
-    });
+  const keyboardReorder = (e, id) => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const index = topicSpeakers.findIndex((sp) => sp.id === id);
+    const target = e.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (target < 0 || target >= topicSpeakers.length) return;
+    reorderTopicSpeakers(id, topicSpeakers[target].id);
   };
 
   return (
     <section className="space-y-4">
       {currentSpeaker ? <div className="rounded-2xl border border-[#007AFF] bg-white p-4 text-sm">Hablando ahora: <strong>{currentSpeaker.country}</strong></div> : <EmptyState icon={Users} title="No hay orador activo" description="Selecciona un país y marca quién está hablando." />}
       <div className="rounded-3xl bg-white p-6 shadow-soft">
-        <div className="mb-4 grid gap-2 md:grid-cols-[1fr_auto]">
+        <div className="mb-2 grid gap-2 md:grid-cols-[1fr_auto]">
           <select value={country} onChange={(e) => setCountry(e.target.value)} className="rounded-xl border p-3">{countries.map((c) => <option key={c}>{c}</option>)}</select>
           <button onClick={addSpeaker} className="rounded-full bg-[#007AFF] px-4 text-white">Agregar a lista</button>
         </div>
-        {topicSpeakers.length ? topicSpeakers.map((s, idx) => (
-          <div key={s.id} className="mb-2 flex items-center justify-between rounded-xl bg-[#F2F2F7] p-3 text-sm">
-            <span className={`${s.status === 'tachado' ? 'line-through text-[#AEAEB2]' : ''}`}>{idx + 1}. {s.country}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setCurrent(s.id)} className={`rounded-full px-3 py-1 ${s.status === 'actual' ? 'bg-[#007AFF] text-white' : 'bg-white'}`}>Habla ahora</button>
-              <button onClick={() => setSpeakers((p) => p.map((x) => x.id === s.id ? { ...x, status: x.status === 'tachado' ? 'pendiente' : 'tachado' } : x))} className="rounded-full bg-white px-3 py-1">{s.status === 'tachado' ? 'Reactivar' : 'Tachar'}</button>
-              <button onClick={() => move(s.id, -1)} className="rounded-full bg-white p-1"><ArrowUp size={14} /></button>
-              <button onClick={() => move(s.id, 1)} className="rounded-full bg-white p-1"><ArrowDown size={14} /></button>
+        <p className="mb-3 text-xs text-[#6E6E73]">Reordenar: arrastra y suelta. Accesible: <kbd className="rounded bg-[#F2F2F7] px-1">Alt</kbd> + <kbd className="rounded bg-[#F2F2F7] px-1">↑/↓</kbd>.</p>
+        {topicSpeakers.length ? topicSpeakers.map((sp, idx) => (
+          <div
+            key={sp.id}
+            draggable
+            onDragStart={() => setDraggingId(sp.id)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (dragOverId !== sp.id) {
+                setDragOverId(sp.id);
+                reorderTopicSpeakers(draggingId, sp.id);
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              reorderTopicSpeakers(draggingId, sp.id);
+              setDraggingId(null);
+              setDragOverId(null);
+            }}
+            onDragEnd={() => {
+              setDraggingId(null);
+              setDragOverId(null);
+            }}
+            onKeyDown={(e) => keyboardReorder(e, sp.id)}
+            tabIndex={0}
+            className={`mb-2 flex cursor-grab items-center justify-between rounded-xl bg-[#F2F2F7] p-3 text-sm transition-all duration-200 ease-in-out ${draggingId === sp.id ? 'scale-[1.01] shadow-soft opacity-90' : ''} ${dragOverId === sp.id ? 'ring-2 ring-[#007AFF]/30' : ''}`}
+          >
+            <span className={`${sp.status === 'tachado' ? 'line-through text-[#AEAEB2]' : ''}`}>{idx + 1}. {sp.country}</span>
+            <div className="flex items-center gap-2">
+              <GripVertical size={16} className="text-[#AEAEB2]" />
+              <button onClick={() => setCurrent(sp.id)} className={`rounded-full px-3 py-1 ${sp.status === 'actual' ? 'bg-[#007AFF] text-white' : 'bg-white'}`}>Habla ahora</button>
+              <button onClick={() => setSpeakers((p) => p.map((x) => x.id === sp.id ? { ...x, status: x.status === 'tachado' ? 'pendiente' : 'tachado' } : x))} className="rounded-full bg-white px-3 py-1">{sp.status === 'tachado' ? 'Reactivar' : 'Tachar'}</button>
             </div>
           </div>
         )) : <EmptyState icon={ListChecks} title="No hay oradores en la lista" description="Empieza agregando países desde tu lista inicial." />}
@@ -765,13 +821,13 @@ function PresentationModal({ speech, onClose }) {
   );
 }
 
-function TimerFullscreen({ timer, formatTime, onClose }) {
+function TimerFullscreen({ timer, displayRemaining, formatTime, onClose }) {
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-[#0F1116] p-6 text-white">
       <button onClick={onClose} className="absolute right-6 top-6 rounded-full bg-white/15 p-2"> <X size={18} /> </button>
       <div className="text-center">
         <p className="text-sm text-white/70">Modo visible para comité · ESC para cerrar</p>
-        <p className="font-number mt-4 text-[120px] leading-none">{formatTime(timer.remaining)}</p>
+        <p className="font-number mt-4 text-[120px] leading-none">{formatTime(displayRemaining)}</p>
         <p className="mt-3 text-lg">{timer.mode}{timer.speakerName ? ` · ${timer.speakerName}` : ''}</p>
       </div>
     </div>
