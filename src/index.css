@@ -67,7 +67,21 @@ body {
 }
 
 .crisis {
-  filter: saturate(1.1);
+  filter: saturate(1.15) contrast(1.03);
+}
+
+.crisis .glass,
+.crisis .glass-strong {
+  background: linear-gradient(135deg, rgba(255, 85, 85, 0.30), rgba(255, 59, 48, 0.16));
+  border-color: rgba(255, 59, 48, 0.42);
+  box-shadow: 0 12px 30px rgba(255, 59, 48, 0.16);
+}
+
+.crisis .rounded-3xl.bg-white,
+.crisis .rounded-2xl.bg-white,
+.crisis .rounded-xl.bg-white {
+  background: linear-gradient(180deg, #fff5f5, #fffafa);
+  border: 1px solid rgba(255, 59, 48, 0.15);
 }
 
 textarea, input, select, button { font: inherit; }

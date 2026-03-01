@@ -267,6 +267,25 @@ function App() {
   const simpleMajority = Math.floor(votingTotal / 2) + 1;
   const twoThirds = Math.ceil(votingTotal * (2 / 3));
 
+  const exportAllData = useCallback(() => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      settings,
+      timer,
+      speakers,
+      alliances,
+      notesGeneral,
+      notesCountries,
+      speeches,
+      attackProfiles,
+      resolution,
+      motions,
+      topicKey,
+    };
+    downloadText(`mun-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
+    pushToast('Exportación completa descargada.', 'success');
+  }, [settings, timer, speakers, alliances, notesGeneral, notesCountries, speeches, attackProfiles, resolution, motions, topicKey, pushToast]);
+
   if (onboardingStep > 0) {
     return (
       <Onboarding
@@ -326,6 +345,7 @@ function App() {
               <span className="rounded-full bg-white/70 px-3 py-1">{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
               <button onClick={() => setCrisisMode((v) => !v)} className={`rounded-full px-3 py-1 ${crisisMode ? 'bg-[#FF3B30] text-white' : 'bg-white/70 text-[#6E6E73]'}`}>Crisis</button>
               <button onClick={() => setNoDistraction((v) => !v)} className="rounded-full bg-white/70 px-3 py-1 text-[#6E6E73]">No molestar</button>
+              <button onClick={exportAllData} className="rounded-full bg-[#1C1C1E] px-3 py-1 text-white">Exportar</button>
             </div>
           </header>
         )}
@@ -463,6 +483,15 @@ function App() {
 
       {presentingSpeechId && <PresentationModal speech={speeches.find((s) => s.id === presentingSpeechId)} onClose={() => setPresentingSpeechId(null)} />}
       {timerFull && <TimerFullscreen timer={timer} formatTime={formatTime} onClose={() => setTimerFull(false)} />}
+
+      {noDistraction && (
+        <div className="fixed left-4 top-4 z-50 flex items-center gap-2 rounded-full glass-strong px-3 py-2 text-xs">
+          <span className="text-[#6E6E73]">Modo no molestar activo</span>
+          <button onClick={() => setNoDistraction(false)} className="rounded-full bg-[#007AFF] px-3 py-1 text-white">Salir</button>
+          <button onClick={() => setCrisisMode((v) => !v)} className={`rounded-full px-3 py-1 ${crisisMode ? 'bg-[#FF3B30] text-white' : 'bg-white text-[#6E6E73]'}`}>Crisis</button>
+          <button onClick={exportAllData} className="rounded-full bg-[#1C1C1E] px-3 py-1 text-white">Exportar</button>
+        </div>
+      )}
     </div>
   );
 }
