@@ -86,7 +86,6 @@ const referenceBase = {
   },
 };
 
-const attackCategories = ['Contradicciones', 'Compromisos rotos', 'Debilidades explotables'];
 
 function readLS(key, fallback) {
   try {
@@ -736,13 +735,100 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
   const [tab, setTab] = useState('Discursos');
   const [draft, setDraft] = useState({ title: '', content: '' });
   const [selectedCountry, setSelectedCountry] = useState(countries[0] || '');
-  const [bullet, setBullet] = useState('');
-  const [category, setCategory] = useState(attackCategories[0]);
+  const [profileDraft, setProfileDraft] = useState({
+    title: '',
+    objective: '',
+    strategy: '',
+    risks: '',
+    impact: '',
+    keyTerms: '',
+  });
   const estimate = (text) => Math.ceil(text.split(/\s+/).filter(Boolean).length / 130);
+
+  useEffect(() => {
+    if (!countries.length) {
+      setSelectedCountry('');
+      return;
+    }
+    if (!countries.includes(selectedCountry)) {
+      setSelectedCountry(countries[0]);
+    }
+  }, [countries, selectedCountry]);
 
   const exportSession = () => {
     const summary = `RESUMEN DE SESIÓN\n\nNotas generales:\n${notesGeneral}\n\nNotas por país:\n${Object.entries(notesCountries).map(([k, v]) => `- ${k}:\n${v}`).join('\n\n')}`;
     downloadText('mun-resumen-sesion.txt', summary);
+  };
+
+  const normalizeProfile = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      return {
+        id: crypto.randomUUID(),
+        title: 'Perfil rápido',
+        objective: raw,
+        strategy: '',
+        risks: '',
+        impact: '',
+        keyTerms: '',
+      };
+    }
+    if (raw.text) {
+      return {
+        id: raw.id || crypto.randomUUID(),
+        title: raw.category ? `${raw.category}` : 'Perfil rápido',
+        objective: raw.text,
+        strategy: '',
+        risks: '',
+        impact: '',
+        keyTerms: '',
+      };
+    }
+    return {
+      id: raw.id || crypto.randomUUID(),
+      title: raw.title || 'Perfil sin título',
+      objective: raw.objective || '',
+      strategy: raw.strategy || '',
+      risks: raw.risks || '',
+      impact: raw.impact || '',
+      keyTerms: raw.keyTerms || '',
+    };
+  };
+
+  const selectedProfiles = useMemo(() => {
+    if (!selectedCountry) return [];
+    return (attackProfiles[selectedCountry] || []).map(normalizeProfile).filter(Boolean);
+  }, [attackProfiles, selectedCountry]);
+
+  const addStructuredProfile = () => {
+    if (!selectedCountry) return;
+    if (!profileDraft.title.trim() && !profileDraft.objective.trim() && !profileDraft.strategy.trim()) {
+      pushToast('Completa al menos título, objetivo o estrategia.', 'warning');
+      return;
+    }
+    const next = {
+      id: crypto.randomUUID(),
+      title: profileDraft.title.trim() || 'Perfil estratégico',
+      objective: profileDraft.objective.trim(),
+      strategy: profileDraft.strategy.trim(),
+      risks: profileDraft.risks.trim(),
+      impact: profileDraft.impact.trim(),
+      keyTerms: profileDraft.keyTerms.trim(),
+    };
+    setAttackProfiles((p) => ({ ...p, [selectedCountry]: [...(p[selectedCountry] || []).map(normalizeProfile), next] }));
+    setProfileDraft({ title: '', objective: '', strategy: '', risks: '', impact: '', keyTerms: '' });
+    pushToast('Perfil de ataque estructurado guardado.', 'success');
+  };
+
+  const removeProfile = (id) => {
+    setAttackProfiles((p) => ({
+      ...p,
+      [selectedCountry]: (p[selectedCountry] || []).map(normalizeProfile).filter((item) => item.id !== id),
+    }));
+  };
+
+  const profileToRichText = (profile, country) => {
+    return `# ${country} · ${profile.title}\n\n**Objetivo**\n${profile.objective || '—'}\n\n**Estrategia**\n${profile.strategy || '—'}\n\n**Riesgos**\n${profile.risks || '—'}\n\n**Impacto**\n${profile.impact || '—'}\n\n**Términos clave**\n${profile.keyTerms || '—'}`;
   };
 
   return (
@@ -751,6 +837,7 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
         {['Discursos', 'Perfiles de ataque'].map((t) => <button key={t} onClick={() => setTab(t)} className={`rounded-full px-4 py-2 text-sm ${tab === t ? 'bg-[#007AFF] text-white' : 'bg-white'}`}>{t}</button>)}
         <button onClick={exportSession} className="rounded-full bg-[#1C1C1E] px-4 py-2 text-sm text-white"><Download size={13} className="mr-1 inline"/>Exportar resumen</button>
       </div>
+
       {tab === 'Discursos' && (
         <div className="rounded-3xl bg-white p-6 shadow-soft">
           <div className="grid gap-3 md:grid-cols-2"><input placeholder="Título" value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} className="rounded-xl border p-3" /><button onClick={() => { if (!draft.title && !draft.content) return; setSpeeches((p) => [...p, { ...draft, id: crypto.randomUUID() }]); setDraft({ title: '', content: '' }); pushToast('Discurso guardado.', 'success'); }} className="rounded-full bg-[#007AFF] px-4 text-white">Guardar discurso</button></div>
@@ -758,19 +845,92 @@ function DocumentsView({ speeches, setSpeeches, attackProfiles, setAttackProfile
           <p className="mt-2 text-sm text-[#6E6E73]">Palabras: {draft.content.split(/\s+/).filter(Boolean).length} · Duración estimada: {estimate(draft.content)} min</p>
           <input value={speechSearch} onChange={(e) => setSpeechSearch(e.target.value)} placeholder="Buscar discurso por título o contenido" className="mt-3 w-full rounded-xl border p-3" />
           <div className="mt-5 space-y-2">
-            {filteredSpeeches.length ? filteredSpeeches.map((s) => <div key={s.id} className="rounded-xl bg-[#F2F2F7] p-3"><div className="flex items-center justify-between"><p className="font-medium">{s.title || 'Sin título'}</p><div className="flex gap-2 text-xs"><button onClick={() => setSpeeches((p) => [...p, { ...s, id: crypto.randomUUID(), title: `${s.title} (copia)` }])} className="rounded-full bg-white px-3 py-1">Duplicar</button><button onClick={() => setPresentingSpeechId(s.id)} className="rounded-full bg-white px-3 py-1">Presentar</button><button onClick={() => downloadText(`${(s.title || 'discurso').replace(/\s+/g, '-').toLowerCase()}.txt`, s.content)} className="rounded-full bg-white px-3 py-1">Exportar</button><button onClick={() => setSpeeches((p) => p.filter((x) => x.id !== s.id))} className="rounded-full bg-white px-3 py-1">Eliminar</button></div></div><p className="mt-1 line-clamp-2 text-sm text-[#6E6E73]">{s.content}</p></div>) : <EmptyState icon={FileText} title="Aún no has creado discursos" description="Empieza redactando o pegando tu primer discurso." />}
+            {filteredSpeeches.length ? filteredSpeeches.map((sp) => <div key={sp.id} className="rounded-xl bg-[#F2F2F7] p-3"><div className="flex items-center justify-between"><p className="font-medium">{sp.title || 'Sin título'}</p><div className="flex gap-2 text-xs"><button onClick={() => setSpeeches((p) => [...p, { ...sp, id: crypto.randomUUID(), title: `${sp.title} (copia)` }])} className="rounded-full bg-white px-3 py-1">Duplicar</button><button onClick={() => setPresentingSpeechId(sp.id)} className="rounded-full bg-white px-3 py-1">Presentar</button><button onClick={() => downloadText(`${(sp.title || 'discurso').replace(/\s+/g, '-').toLowerCase()}.txt`, sp.content)} className="rounded-full bg-white px-3 py-1">Exportar</button><button onClick={() => setSpeeches((p) => p.filter((x) => x.id !== sp.id))} className="rounded-full bg-white px-3 py-1">Eliminar</button></div></div><p className="mt-1 line-clamp-2 text-sm text-[#6E6E73]">{sp.content}</p></div>) : <EmptyState icon={FileText} title="Aún no has creado discursos" description="Empieza redactando o pegando tu primer discurso." />}
           </div>
         </div>
       )}
+
       {tab === 'Perfiles de ataque' && (
         <div className="rounded-3xl bg-white p-6 shadow-soft">
-          <div className="mb-3 grid gap-2 md:grid-cols-4"><select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} className="rounded-xl border p-3">{countries.map((c) => <option key={c}>{c}</option>)}</select><select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-xl border p-3">{attackCategories.map((c) => <option key={c}>{c}</option>)}</select><input value={bullet} onChange={(e) => setBullet(e.target.value)} placeholder="Agregar vulnerabilidad" className="rounded-xl border p-3 md:col-span-2" /></div>
-          <button onClick={() => { if (!selectedCountry || !bullet) return; setAttackProfiles((p) => ({ ...p, [selectedCountry]: [...(p[selectedCountry] || []), { text: bullet, category }] })); setBullet(''); }} className="rounded-full bg-[#007AFF] px-4 py-2 text-sm text-white">Agregar</button>
-          <div className="mt-4 space-y-2">
-            {Object.keys(attackProfiles).length ? Object.entries(attackProfiles).map(([country, items]) => <div key={country} className="rounded-xl bg-[#F2F2F7] p-3"><p className="font-medium">{country}</p>{items.map((item, idx) => { const line = typeof item === 'string' ? { text: item, category: 'General' } : item; return <div key={`${country}-${idx}`} className="mt-1 flex items-center justify-between text-sm"><span>• [{line.category}] {line.text}</span><button onClick={() => navigator.clipboard.writeText(`Pregunta para ${country}: ${line.text}`)} className="rounded-full bg-white px-2 py-1"><Copy size={12} /></button></div>; })}</div>) : <EmptyState icon={ShieldAlert} title="Todavía no has cargado perfiles de ataque" description="Selecciona un país y agrega contradicciones o debilidades." />}
+          <div className="mb-5 grid gap-3 md:grid-cols-[1fr_auto]">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-[#AEAEB2]">Contexto activo</p>
+              <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} className="mt-1 w-full rounded-xl border p-3">
+                {!countries.length && <option value="">No hay países cargados</option>}
+                {countries.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="self-end rounded-xl bg-[#F8F8FC] px-4 py-3 text-sm text-[#6E6E73]">Mostrando solo perfiles de <strong>{selectedCountry || '—'}</strong></div>
           </div>
+
+          {!selectedCountry ? (
+            <EmptyState icon={ShieldAlert} title="Selecciona un país" description="Elige una delegación para ver o crear perfiles estratégicos enfocados." />
+          ) : (
+            <>
+              <div className="rounded-2xl bg-[#F8F8FC] p-4">
+                <p className="mb-3 text-sm font-semibold">Nuevo perfil estructurado</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={profileDraft.title} onChange={(e) => setProfileDraft((d) => ({ ...d, title: e.target.value }))} placeholder="Título del perfil" className="rounded-xl border p-3" />
+                  <input value={profileDraft.keyTerms} onChange={(e) => setProfileDraft((d) => ({ ...d, keyTerms: e.target.value }))} placeholder="Términos clave (coma separada)" className="rounded-xl border p-3" />
+                  <textarea value={profileDraft.objective} onChange={(e) => setProfileDraft((d) => ({ ...d, objective: e.target.value }))} placeholder="Objetivo" className="rounded-xl border p-3 md:col-span-2" rows={3} />
+                  <textarea value={profileDraft.strategy} onChange={(e) => setProfileDraft((d) => ({ ...d, strategy: e.target.value }))} placeholder="Estrategia" className="rounded-xl border p-3" rows={3} />
+                  <textarea value={profileDraft.risks} onChange={(e) => setProfileDraft((d) => ({ ...d, risks: e.target.value }))} placeholder="Riesgos" className="rounded-xl border p-3" rows={3} />
+                  <textarea value={profileDraft.impact} onChange={(e) => setProfileDraft((d) => ({ ...d, impact: e.target.value }))} placeholder="Impacto esperado" className="rounded-xl border p-3 md:col-span-2" rows={3} />
+                </div>
+                <button onClick={addStructuredProfile} className="mt-3 rounded-full bg-[#007AFF] px-4 py-2 text-sm text-white">Guardar perfil</button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {selectedProfiles.length ? selectedProfiles.map((profile) => (
+                  <article key={profile.id} className="rounded-2xl bg-white p-5 shadow-soft ring-1 ring-[rgba(60,60,67,0.08)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-base font-semibold text-[#1C1C1E]">{profile.title}</h4>
+                        <p className="mt-1 text-xs uppercase tracking-wide text-[#AEAEB2]">{selectedCountry}</p>
+                      </div>
+                      <div className="flex gap-2 text-xs">
+                        <button onClick={() => navigator.clipboard.writeText(profileToRichText(profile, selectedCountry))} className="rounded-full bg-[#F2F2F7] px-3 py-1">Copiar formato</button>
+                        <button onClick={() => removeProfile(profile.id)} className="rounded-full bg-[#F2F2F7] px-3 py-1 text-[#FF3B30]">Eliminar</button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-4 text-sm text-[#1C1C1E]">
+                      <section>
+                        <p className="font-semibold">Objetivo</p>
+                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.objective || 'Sin definir.'}</p>
+                      </section>
+                      <div className="h-px bg-[rgba(60,60,67,0.10)]" />
+                      <section>
+                        <p className="font-semibold">Estrategia</p>
+                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.strategy || 'Sin definir.'}</p>
+                      </section>
+                      <div className="h-px bg-[rgba(60,60,67,0.10)]" />
+                      <section>
+                        <p className="font-semibold">Riesgos</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-5 text-[#3A3A3C]">
+                          {(profile.risks ? profile.risks.split(/\n+/) : ['Sin riesgos documentados.']).map((r, i) => <li key={`${profile.id}-risk-${i}`}>{r}</li>)}
+                        </ul>
+                      </section>
+                      <div className="h-px bg-[rgba(60,60,67,0.10)]" />
+                      <section>
+                        <p className="font-semibold">Impacto</p>
+                        <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#3A3A3C]">{profile.impact || 'Sin definir.'}</p>
+                      </section>
+                      <section>
+                        <p className="font-semibold">Términos clave</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(profile.keyTerms ? profile.keyTerms.split(',').map((t) => t.trim()).filter(Boolean) : ['N/A']).map((term, i) => <span key={`${profile.id}-term-${i}`} className="rounded-full bg-[#F2F2F7] px-3 py-1 text-xs text-[#6E6E73]">{term}</span>)}
+                        </div>
+                      </section>
+                    </div>
+                  </article>
+                )) : <EmptyState icon={ShieldAlert} title="Sin perfiles para este país" description="Crea el primer perfil estratégico estructurado para esta delegación." />}
+              </div>
+            </>
+          )}
         </div>
       )}
+
       {presentingSpeechId && <div className="rounded-xl bg-[#F2F2F7] p-3 text-sm">Modo presentación activo.</div>}
     </section>
   );
